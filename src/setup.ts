@@ -26,25 +26,35 @@ import * as fs from 'fs';
 
 import * as crypto from 'crypto';
 
+const DEFAULT_REPOSITORY = 'mozilla/sccache';
+
+type Repository = {
+  owner: string;
+  repo: string;
+  name: string;
+  toolCacheName: string;
+};
+
 async function setup() {
+  const repository = parseRepository(core.getInput('repository'));
   let version = core.getInput('version');
   if (version.length === 0) {
     // If no version is specified, the latest version is used by default.
     const token = core.getInput('token', {required: true});
     const octokit = getOctokit(token, {baseUrl: 'https://api.github.com'});
     const release = await octokit.rest.repos.getLatestRelease({
-      owner: 'mozilla',
-      repo: 'sccache'
+      owner: repository.owner,
+      repo: repository.repo
     });
     version = release.data.tag_name;
   }
-  core.info(`try to setup sccache version: ${version}`);
+  core.info(`try to setup sccache version: ${version} from ${repository.name}`);
 
   // Search local file system cache for sccache.
   // This is useful when actions run on a self-hosted runner.
-  let sccacheHome = find('sccache', version);
+  let sccacheHome = find(repository.toolCacheName, version);
   if (sccacheHome === '') {
-    const sccachePath = await downloadSCCache(version);
+    const sccachePath = await downloadSCCache(version, repository);
     if (sccachePath instanceof Error) {
       core.setFailed(sccachePath.message);
       return;
@@ -53,7 +63,7 @@ async function setup() {
       // Cache sccache.
       sccacheHome = await cacheDir(
         `${sccachePath}/${dirname}`,
-        'sccache',
+        repository.toolCacheName,
         version
       );
       core.info(`sccache cached to: ${sccacheHome}`);
@@ -82,11 +92,15 @@ async function setup() {
 }
 /**
  * @param version sccache version
+ * @param repository GitHub repository to download sccache releases from
  * @returns Path to sccache on success. Error on checksum verification failure. */
-async function downloadSCCache(version: string): Promise<Error | string> {
+async function downloadSCCache(
+  version: string,
+  repository: Repository
+): Promise<Error | string> {
   const filename = getFilename(version);
 
-  const downloadUrl = `https://github.com/mozilla/sccache/releases/download/${version}/${filename}`;
+  const downloadUrl = `https://github.com/${repository.name}/releases/download/${version}/${filename}`;
   const sha256Url = `${downloadUrl}.sha256`;
   core.info(`sccache download from url: ${downloadUrl}`);
 
@@ -119,6 +133,32 @@ async function downloadSCCache(version: string): Promise<Error | string> {
   }
   core.info(`sccache extracted to: ${sccachePath}`);
   return sccachePath;
+}
+
+function parseRepository(input: string): Repository {
+  const name = input.trim() || DEFAULT_REPOSITORY;
+  const parts = name.split('/');
+  if (parts.length !== 2 || parts[0].length === 0 || parts[1].length === 0) {
+    throw new Error(
+      `Invalid repository "${name}". Expected a GitHub repository in owner/name format.`
+    );
+  }
+
+  const toolCacheName =
+    name === DEFAULT_REPOSITORY
+      ? 'sccache'
+      : `sccache-${sanitizeCacheKey(name)}`;
+
+  return {
+    owner: parts[0],
+    repo: parts[1],
+    name,
+    toolCacheName
+  };
+}
+
+function sanitizeCacheKey(input: string): string {
+  return input.replace(/[^A-Za-z0-9._-]/g, '-');
 }
 
 function getFilename(version: string): Error | string {

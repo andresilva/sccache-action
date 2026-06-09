@@ -43,6 +43,16 @@ Versions prior to sccache v0.10.0 probably will not work.
     version: "v0.10.0"
 ```
 
+### Use a sccache release from another GitHub repository
+
+```yml
+- name: Run sccache-cache
+  uses: mozilla-actions/sccache-action@v0.0.10
+  with:
+    repository: "andresilva/sccache"
+    version: "v0.15.0-commonware.1"
+```
+
 ### To get the execution stats
 
 Note that using the previous declaration will automatically create a
@@ -70,6 +80,7 @@ For Rust code, the following environment variables should be set:
 ```yml
     env:
       SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_GHA_RW_MODE: "READ_ONLY"
       RUSTC_WRAPPER: "sccache"
 ```
 

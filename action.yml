@@ -3,6 +3,9 @@ name: "Sccache Action"
 description: "Setup sccache action"
 author: "mozilla"
 inputs:
+  repository:
+    description: "The GitHub repository to download sccache releases from."
+    default: "mozilla/sccache"
   version:
     description: "The installed sccache version. Use the latest version of sccache if not specified."
   token:
